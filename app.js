@@ -1,4 +1,4 @@
-﻿const API = "https://script.google.com/macros/s/AKfycbzXPPImpVD97UnMutd33Hh3BSA1HWKLeHLgMvhPp_rLJtmdYZd3p-LwxA3gCTaFcK0G/exec";
+const API = "https://script.google.com/macros/s/AKfycbzXPPImpVD97UnMutd33Hh3BSA1HWKLeHLgMvhPp_rLJtmdYZd3p-LwxA3gCTaFcK0G/exec";
 
 const WEEK_DAYS = [
   { key: "Lunes", label: "Lunes", short: "Lun", offset: 0 },
@@ -22,7 +22,7 @@ const DAY_KEY_BY_NORMALIZED = Object.freeze(
     return acc;
   }, {})
 );
-const SUBMISSION_CUTOFF_HOUR = 12;
+const SUBMISSION_CUTOFF_HOUR = 14;
 const SUBMISSION_CUTOFF_LABEL = formatHourLabel(SUBMISSION_CUTOFF_HOUR);
 
 const STATUS_META = {
@@ -82,6 +82,7 @@ const state = {
     miembros: [],
     devos: []
   },
+  cacheReady: false,
   attendanceOverrides: {},
   modal: {
     miembroId: "",
@@ -280,7 +281,7 @@ async function cargarVista(vista) {
   }
 
   state.genero = vista === "discipulas" ? "F" : "M";
-  await renderDashboardView(true);
+  await renderDashboardView(!state.cacheReady);
 }
 
 function setActiveNav(vista) {
@@ -324,10 +325,13 @@ function renderRegistroView() {
 }
 
 async function renderDashboardView(forceReload) {
-  renderDashboardSkeleton();
+  const shouldShowSkeleton = forceReload || !el.contenido?.querySelector(".dashboard-wrap");
+  if (shouldShowSkeleton) {
+    renderDashboardSkeleton();
+  }
 
   try {
-    if (forceReload || !state.cache.miembros.length) {
+    if (forceReload || !state.cacheReady) {
       await cargarDatosRemotos();
     }
 
@@ -370,6 +374,7 @@ async function cargarDatosRemotos() {
 
     state.cache.miembros = normalizeMiembros(miembrosRaw);
     state.cache.devos = normalizeDevos(devosRaw);
+    state.cacheReady = true;
   }, "Sincronizando información...");
 }
 
