@@ -1,0 +1,126 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ministerio Danat | Dashboard Devocionales</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+
+   <!-- 🧩 Favicon clásico -->
+  <link rel="icon" type="image/png" href="./images/favicon.png">
+
+  <!-- 📱 Ícono de app (iOS / Android) -->
+  <link rel="apple-touch-icon" href="./images/favicon.png">
+
+  <!-- 🧭 Configuración PWA -->
+  <meta name="theme-color" content="#d4e7fe">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Marcajes Indira">
+
+  <!-- 📜 Manifest -->
+  <link rel="manifest" href="./manifest.json">
+  
+</head>
+<body>
+
+  <div class="aurora aurora-a"></div>
+  <div class="aurora aurora-b"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar panel">
+      <div class="brand-wrap">
+        <p class="eyebrow">Ministerio Danat</p>
+        <h1>Dashboard Devocionales</h1>
+        <p class="brand-subtitle">Control moderno, simple y elegante.</p>
+      </div>
+
+      <nav class="nav-actions" aria-label="Navegación principal">
+        <button id="navDiscipulos" onclick="cargarVista('discipulos')">Discípulos</button>
+        <button id="navDiscipulas" onclick="cargarVista('discipulas')">Discípulas</button>
+        <button id="navRegistro" onclick="cargarVista('registro')">Registrar</button>
+      </nav>
+
+      <section class="meeting-settings" aria-label="Configuración de reuniones">
+        <p class="eyebrow">Configuración</p>
+        <h3>Días de reunión</h3>
+        <p>Marca los días que exigirán asistencia a las reuniones.</p>
+        <div id="meetingDaysOptions" class="meeting-days-grid"></div>
+        <small id="meetingDaysSummary" class="meeting-days-summary">Activos: -</small>
+      </section>
+
+      <p class="sidebar-foot">Interfaz premium responsive</p>
+    </aside>
+
+    <main class="main-panel">
+      <header class="hero panel">
+        <p class="eyebrow">Experiencia</p>
+        <h2>Panel de seguimiento</h2>
+        <p class="hero-subtitle">Diseñado para operar en móvil, tablet y escritorio sin fricción.</p>
+      </header>
+
+      <section id="contenido" class="content panel">
+        <h3>Bienvenido</h3>
+        <p>Selecciona una opción para empezar.</p>
+      </section>
+    </main>
+  </div>
+
+  <div id="globalLoader" class="global-loader hidden" aria-live="polite" aria-busy="true">
+    <div class="loader-card">
+      <span class="loader-spinner" aria-hidden="true"></span>
+      <p id="loaderText">Cargando información...</p>
+    </div>
+  </div>
+
+  <div id="markModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="markModalTitle">
+    <div class="modal-card">
+      <button class="modal-close" type="button" data-action="close-modal" aria-label="Cerrar">×</button>
+      <p class="eyebrow">Registro devocional</p>
+      <h3 id="markModalTitle">Marcar estado</h3>
+      <p id="markModalContext" class="modal-context"></p>
+
+      <div class="modal-grid">
+        <button class="modal-state modal-state-connected" type="button" data-action="select-mark-state" data-state="CONECTO">CLASE</button>
+        <button class="modal-state modal-state-sent" type="button" data-action="select-mark-state" data-state="ENVIADO">Enviado</button>
+        <button class="modal-state modal-state-missed" type="button" data-action="select-mark-state" data-state="NO">Fallido</button>
+      </div>
+
+      <div id="modalAttendanceWrap" class="modal-attendance-wrap hidden">
+        <p class="modal-attendance-title">Asistencia a reunión</p>
+        <div class="modal-attendance-grid">
+          <button class="modal-attendance modal-attendance-yes" type="button" data-action="select-mark-attendance" data-attendance="ASISTIO">★ Asistió</button>
+          <button class="modal-attendance modal-attendance-no" type="button" data-action="select-mark-attendance" data-attendance="NO_ASISTIO">✕ No asistió</button>
+        </div>
+      </div>
+
+      <div id="modalGuestWrap" class="modal-guest-wrap hidden">
+        <label for="modalGuestInput">Invitados del sábado</label>
+        <input id="modalGuestInput" type="number" min="0" max="999" step="1" value="0">
+      </div>
+
+      <button id="modalSubmitBtn" class="modal-submit" type="button" data-action="submit-mark">Guardar registro</button>
+      <button class="modal-cancel" type="button" data-action="close-modal">Cancelar</button>
+    </div>
+  </div>
+
+  <div id="deleteMemberModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="deleteMemberModalTitle">
+    <div class="modal-card delete-modal-card">
+      <button class="modal-close" type="button" data-action="close-delete-member-modal" aria-label="Cerrar">×</button>
+      <p class="eyebrow">Acción de riesgo</p>
+      <h3 id="deleteMemberModalTitle">¿Eliminar este miembro?</h3>
+      <p id="deleteMemberModalContext" class="modal-context"></p>
+      <button id="deleteMemberConfirmBtn" class="modal-submit delete-modal-submit" type="button" data-action="confirm-delete-member">Eliminar definitivamente</button>
+      <button class="modal-cancel" type="button" data-action="close-delete-member-modal">Cancelar</button>
+    </div>
+  </div>
+
+  <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
