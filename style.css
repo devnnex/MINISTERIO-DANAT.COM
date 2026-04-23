@@ -1479,7 +1479,7 @@ button:disabled {
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 760px) and (orientation: portrait) {
   .app-shell {
     max-width: 580px;
     padding: 12px;
@@ -1554,25 +1554,26 @@ button:disabled {
     justify-items: stretch;
     min-height: 58px;
     text-align: left;
-    position: relative;
-    padding-left: 64px;
+    padding: 10px 12px;
+    gap: 10px;
   }
 
   .day-cell::before {
     content: attr(data-day-label);
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 42px;
+    position: static;
+    transform: none;
+    width: 34px;
     font-size: 0.72rem;
     font-weight: 800;
     color: #4b5565;
     text-transform: uppercase;
+    justify-self: start;
   }
 
   .day-cell-state {
     font-size: 0.82rem;
+    justify-self: start;
+    white-space: nowrap;
   }
 
   .day-cell-date {
