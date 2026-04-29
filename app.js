@@ -1,4 +1,4 @@
-const API = "https://script.google.com/macros/s/AKfycbzXPPImpVD97UnMutd33Hh3BSA1HWKLeHLgMvhPp_rLJtmdYZd3p-LwxA3gCTaFcK0G/exec";
+const API = "https://script.google.com/macros/s/AKfycbziV_gHrEeCX8Cf5-xf9IKjscGVPPy_pdkPyWUIflSCVDz42tajl3xTMPEvqCs5Yd7M/exec";
 
 const WEEK_DAYS = [
   { key: "Lunes", label: "Lunes", short: "Lun", offset: 0 },
@@ -10,6 +10,7 @@ const WEEK_DAYS = [
 ];
 const DEFAULT_MEETING_DAY_KEYS = ["Martes", "Miercoles", "Jueves", "Sabado"];
 const MEETING_DAYS_STORAGE_KEY = "discipulado_meeting_days_v1";
+const SECOND_MEETING_DAY_KEYS = ["Miercoles", "Sabado"];
 const WEEKDAY_NUMBER_BY_KEY = Object.freeze(
   WEEK_DAYS.reduce((acc, day) => {
     acc[day.key] = day.offset + 1;
@@ -84,6 +85,7 @@ const state = {
   },
   cacheReady: false,
   attendanceOverrides: {},
+  attendanceTwoOverrides: {},
   modal: {
     miembroId: "",
     fechaISO: "",
@@ -91,8 +93,11 @@ const state = {
     estadoSeleccionado: "",
     asistenciaActual: "",
     asistenciaSeleccionada: "",
+    asistenciaDosActual: "",
+    asistenciaDosSeleccionada: "",
     registroExistente: false,
     esReunion: false,
+    esReunionDos: false,
     esSabado: false,
     sabadoInvitados: 0
   },
@@ -131,6 +136,8 @@ function cacheElements() {
   el.deleteMemberModalContext = document.getElementById("deleteMemberModalContext");
   el.deleteMemberConfirmBtn = document.getElementById("deleteMemberConfirmBtn");
   el.modalAttendanceWrap = document.getElementById("modalAttendanceWrap");
+  el.modalAttendanceTwoWrap = document.getElementById("modalAttendanceTwoWrap");
+  el.markModalAttendanceInfo = document.getElementById("markModalAttendanceInfo");
   el.modalGuestWrap = document.getElementById("modalGuestWrap");
   el.modalGuestInput = document.getElementById("modalGuestInput");
   el.modalSubmitBtn = document.getElementById("modalSubmitBtn");
@@ -169,6 +176,11 @@ function bindEvents() {
 
     if (action === "select-mark-attendance") {
       seleccionarAsistenciaModal(trigger.dataset.attendance);
+      return;
+    }
+
+    if (action === "select-mark-attendance-two") {
+      seleccionarAsistenciaDosModal(trigger.dataset.attendance);
       return;
     }
 
@@ -329,7 +341,6 @@ async function renderDashboardView(forceReload) {
   if (shouldShowSkeleton) {
     renderDashboardSkeleton();
   }
-
   try {
     if (forceReload || !state.cacheReady) {
       await cargarDatosRemotos();
@@ -422,17 +433,25 @@ function buildDashboardMarkup() {
         const meta = STATUS_META[status] || STATUS_META.PENDIENTE;
         const invitados = clampNonNegativeInt(devo?.invitados);
         const asistencia = resolveAttendanceValue(devo?.asistencia, key);
+        const asistenciaDos = resolveAttendanceTwoValue(devo?.asistenciaDos, key);
         const attendanceMeta = ATTENDANCE_META[asistencia];
+        const attendanceTwoMeta = ATTENDANCE_META[asistenciaDos];
         const esReunion = isMeetingDayISO(day.iso);
-        const lockedByCutoff = Boolean(devo?.lockedByCutoff);
+        const esReunionDos = esReunion && isSecondMeetingDayISO(day.iso);
+        const lockedByCutoff = false;
         const lockClass = lockedByCutoff ? "day-cell-locked" : "";
         const lockAttrs = lockedByCutoff ? `disabled aria-disabled="true" data-locked="1"` : `data-locked="0"`;
         const title = lockedByCutoff ? `${meta.label} · Bloqueado por corte ${SUBMISSION_CUTOFF_LABEL}` : meta.label;
+        const attendanceTitle = buildAttendanceSummaryText(asistencia, asistenciaDos, esReunionDos);
+        const finalTitle = attendanceTitle ? `${meta.label} - ${attendanceTitle}` : meta.label;
         const guestBadge = isSaturdayISO(day.iso) && invitados > 0
           ? `<span class="day-cell-guests">+${invitados} invitados</span>`
           : "";
-        const attendanceBadge = esReunion && attendanceMeta
-          ? `<span class="${attendanceMeta.className}" aria-label="${escapeHtml(attendanceMeta.label)}" title="${escapeHtml(attendanceMeta.label)}">${attendanceMeta.badge}</span>`
+        const attendanceBadge = esReunion && (attendanceMeta || attendanceTwoMeta)
+          ? `<span class="attendance-corner-stack" aria-label="${escapeHtml(attendanceTitle)}" title="${escapeHtml(attendanceTitle)}">
+              ${attendanceMeta ? `<span class="${attendanceMeta.className}">${attendanceMeta.badge}</span>` : ""}
+              ${esReunionDos && attendanceTwoMeta ? `<span class="${attendanceTwoMeta.className} attendance-corner-night">${attendanceTwoMeta.badge}</span>` : ""}
+            </span>`
           : "";
 
         return `
@@ -445,9 +464,10 @@ function buildDashboardMarkup() {
             data-estado="${status}"
             data-invitados="${invitados}"
             data-asistencia="${asistencia}"
+            data-asistencia-dos="${asistenciaDos}"
             data-day-label="${day.short}"
             ${lockAttrs}
-            title="${escapeHtml(title)}"
+            title="${escapeHtml(finalTitle)}"
           >
             ${attendanceBadge}
             <span class="day-cell-state">${meta.chip}</span>
@@ -780,6 +800,7 @@ function onContentClick(event) {
       trigger.dataset.estado || "PENDIENTE",
       trigger.dataset.invitados,
       trigger.dataset.asistencia,
+      trigger.dataset.asistenciaDos,
       trigger.dataset.locked === "1"
     );
     return;
@@ -933,7 +954,7 @@ async function eliminarMiembroFrontend(miembroId) {
   }
 }
 
-function openMarkModal(miembroId, fechaISO, estadoActual, invitadosRaw = 0, asistenciaActual = "", lockedByCutoff = false) {
+function openMarkModal(miembroId, fechaISO, estadoActual, invitadosRaw = 0, asistenciaActual = "", asistenciaDosActual = "", lockedByCutoff = false) {
   if (!miembroId || !fechaISO) {
     return;
   }
@@ -947,15 +968,19 @@ function openMarkModal(miembroId, fechaISO, estadoActual, invitadosRaw = 0, asis
   state.modal.miembroId = miembroId;
   state.modal.fechaISO = fechaISO;
   state.modal.esReunion = isMeetingDayISO(fechaISO);
+  state.modal.esReunionDos = state.modal.esReunion && isSecondMeetingDayISO(fechaISO);
   state.modal.esSabado = isSaturdayISO(fechaISO);
 
   const latest = findLatestDevoForDay(miembroId, fechaISO);
-  const estadoBase = latest?.estado || estadoActual;
+  const latestEstado = normalizeEstado(latest?.estado);
+  const triggerEstado = normalizeEstado(estadoActual);
+  const estadoBase = latest && latestEstado !== "PENDIENTE" ? latestEstado : triggerEstado;
   const invitadosBase = latest?.invitados ?? invitadosRaw;
   const asistenciaBase = latest?.asistencia ?? asistenciaActual;
-  const cutoffLock = lockedByCutoff || (normalizeEstado(estadoBase) === "PENDIENTE" && hasSubmissionCutoffPassed(fechaISO));
+  const asistenciaDosBase = latest?.asistenciaDos ?? asistenciaDosActual;
+  const cutoffLock = false;
 
-  if (cutoffLock) {
+  if (false && cutoffLock) {
     showToast(`Este horario quedó cerrado por corte (${SUBMISSION_CUTOFF_LABEL}).`, "warning");
     return;
   }
@@ -964,12 +989,20 @@ function openMarkModal(miembroId, fechaISO, estadoActual, invitadosRaw = 0, asis
   state.modal.estadoSeleccionado = state.modal.estadoActual === "PENDIENTE" ? "" : state.modal.estadoActual;
   state.modal.asistenciaActual = normalizeAsistencia(asistenciaBase);
   state.modal.asistenciaSeleccionada = state.modal.asistenciaActual;
+  state.modal.asistenciaDosActual = normalizeAsistencia(asistenciaDosBase);
+  state.modal.asistenciaDosSeleccionada = state.modal.asistenciaDosActual;
   state.modal.registroExistente = Boolean(latest);
   state.modal.sabadoInvitados = clampNonNegativeInt(invitadosBase);
 
   el.markModalTitle.textContent = `Marcar a ${member.nombre}`;
   el.markModalContext.textContent = `${formatDatePretty(fechaISO)} · Estado actual: ${STATUS_META[state.modal.estadoActual]?.label || "Pendiente"}`;
+  if (el.markModalAttendanceInfo) {
+    const summary = buildAttendanceDetailText(state.modal.asistenciaSeleccionada, state.modal.asistenciaDosSeleccionada, state.modal.esReunionDos);
+    el.markModalAttendanceInfo.textContent = state.modal.esReunion && summary ? summary : "";
+    el.markModalAttendanceInfo.classList.toggle("hidden", !state.modal.esReunion || !summary);
+  }
   el.modalAttendanceWrap.classList.toggle("hidden", !state.modal.esReunion);
+  el.modalAttendanceTwoWrap?.classList.toggle("hidden", !state.modal.esReunionDos);
   el.modalGuestWrap.classList.toggle("hidden", !state.modal.esSabado);
   el.modalGuestInput.value = String(state.modal.sabadoInvitados);
 
@@ -980,6 +1013,10 @@ function openMarkModal(miembroId, fechaISO, estadoActual, invitadosRaw = 0, asis
 
   el.markModal.querySelectorAll("[data-action='select-mark-attendance']").forEach((btn) => {
     const isCurrent = normalizeAsistencia(btn.dataset.attendance) === state.modal.asistenciaSeleccionada;
+    btn.classList.toggle("is-selected", isCurrent);
+  });
+  el.markModal.querySelectorAll("[data-action='select-mark-attendance-two']").forEach((btn) => {
+    const isCurrent = normalizeAsistencia(btn.dataset.attendance) === state.modal.asistenciaDosSeleccionada;
     btn.classList.toggle("is-selected", isCurrent);
   });
   refreshModalSubmitButton();
@@ -994,10 +1031,18 @@ function closeMarkModal() {
   state.modal.estadoSeleccionado = "";
   state.modal.asistenciaActual = "";
   state.modal.asistenciaSeleccionada = "";
+  state.modal.asistenciaDosActual = "";
+  state.modal.asistenciaDosSeleccionada = "";
   state.modal.registroExistente = false;
   state.modal.esReunion = false;
+  state.modal.esReunionDos = false;
   state.modal.esSabado = false;
   state.modal.sabadoInvitados = 0;
+  if (el.markModalAttendanceInfo) {
+    el.markModalAttendanceInfo.textContent = "";
+    el.markModalAttendanceInfo.classList.add("hidden");
+  }
+  el.modalAttendanceTwoWrap?.classList.add("hidden");
   el.modalGuestInput.value = "0";
   refreshModalSubmitButton();
   el.markModal.classList.add("hidden");
@@ -1022,7 +1067,30 @@ function seleccionarAsistenciaModal(asistencia) {
     btn.classList.toggle("is-selected", isSelected);
   });
 
+  refreshModalAttendanceInfo();
   refreshModalSubmitButton();
+}
+
+function seleccionarAsistenciaDosModal(asistencia) {
+  state.modal.asistenciaDosSeleccionada = normalizeAsistencia(asistencia);
+
+  el.markModal.querySelectorAll("[data-action='select-mark-attendance-two']").forEach((btn) => {
+    const isSelected = normalizeAsistencia(btn.dataset.attendance) === state.modal.asistenciaDosSeleccionada;
+    btn.classList.toggle("is-selected", isSelected);
+  });
+
+  refreshModalAttendanceInfo();
+  refreshModalSubmitButton();
+}
+
+function refreshModalAttendanceInfo() {
+  if (!el.markModalAttendanceInfo) {
+    return;
+  }
+
+  const summary = buildAttendanceDetailText(state.modal.asistenciaSeleccionada, state.modal.asistenciaDosSeleccionada, state.modal.esReunionDos);
+  el.markModalAttendanceInfo.textContent = state.modal.esReunion && summary ? summary : "";
+  el.markModalAttendanceInfo.classList.toggle("hidden", !state.modal.esReunion || !summary);
 }
 
 function refreshModalSubmitButton() {
@@ -1033,7 +1101,9 @@ function refreshModalSubmitButton() {
   const hasSelectedState = normalizeEstado(state.modal.estadoSeleccionado) !== "PENDIENTE";
   const requiresAttendance = Boolean(state.modal.esReunion);
   const hasSelectedAttendance = normalizeAsistencia(state.modal.asistenciaSeleccionada) !== "";
-  el.modalSubmitBtn.disabled = !hasSelectedState || (requiresAttendance && !hasSelectedAttendance);
+  const requiresAttendanceTwo = Boolean(state.modal.esReunionDos);
+  const hasSelectedAttendanceTwo = normalizeAsistencia(state.modal.asistenciaDosSeleccionada) !== "";
+  el.modalSubmitBtn.disabled = !hasSelectedState || (requiresAttendance && !hasSelectedAttendance) || (requiresAttendanceTwo && !hasSelectedAttendanceTwo);
   el.modalSubmitBtn.textContent = state.modal.registroExistente ? "Actualizar registro" : "Guardar registro";
 }
 
@@ -1042,8 +1112,10 @@ async function guardarMarcaDesdeModal() {
   const fechaISO = String(state.modal.fechaISO || "").trim();
   const estadoNormalizado = normalizeEstado(state.modal.estadoSeleccionado);
   const asistenciaNormalizada = normalizeAsistencia(state.modal.asistenciaSeleccionada);
+  const asistenciaDosNormalizada = normalizeAsistencia(state.modal.asistenciaDosSeleccionada);
   const isUpdate = Boolean(state.modal.registroExistente);
   const esReunion = Boolean(state.modal.esReunion);
+  const esReunionDos = Boolean(state.modal.esReunionDos);
   const esSabado = Boolean(state.modal.esSabado);
   const invitadosSabado = esSabado
     ? clampNonNegativeInt(el.modalGuestInput.value)
@@ -1059,6 +1131,11 @@ async function guardarMarcaDesdeModal() {
   }
 
   try {
+    if (esReunionDos && !asistenciaDosNormalizada) {
+      showToast("Selecciona asistencia para la reunion de la tarde o noche.", "warning");
+      return;
+    }
+
     const accionTexto = isUpdate ? "Actualizando registro..." : "Guardando registro...";
     closeMarkModal();
 
@@ -1079,6 +1156,10 @@ async function guardarMarcaDesdeModal() {
         payload.asistio = asistenciaNormalizada === "ASISTIO" ? "SI" : "NO";
       }
 
+      if (esReunionDos) {
+        payload.asistencia_reunion_dos = asistenciaDosNormalizada;
+      }
+
       if (esSabado) {
         payload.sabadoInvitados = invitadosSabado;
         payload.invitados = invitadosSabado;
@@ -1094,8 +1175,14 @@ async function guardarMarcaDesdeModal() {
     const overrideKey = `${miembroId}|${fechaISO}`;
     if (esReunion) {
       state.attendanceOverrides[overrideKey] = asistenciaNormalizada;
+      if (esReunionDos) {
+        state.attendanceTwoOverrides[overrideKey] = asistenciaDosNormalizada;
+      } else if (state.attendanceTwoOverrides[overrideKey]) {
+        delete state.attendanceTwoOverrides[overrideKey];
+      }
     } else if (state.attendanceOverrides[overrideKey]) {
       delete state.attendanceOverrides[overrideKey];
+      delete state.attendanceTwoOverrides[overrideKey];
     }
 
     await runWithLoader(async () => {
@@ -1354,6 +1441,15 @@ function normalizeDevos(rows) {
         "attended",
         "attendance"
       ]);
+      const asistenciaDos = getAny(row, [
+        "asistencia_reunion_dos",
+        "asistenciaReunionDos",
+        "AsistenciaReunionDos",
+        "reunion_dos",
+        "reunionDos",
+        "segunda_reunion",
+        "segundaReunion"
+      ]);
 
       return {
         id: String(id ?? "").trim() || `row_${index}`,
@@ -1362,6 +1458,7 @@ function normalizeDevos(rows) {
         estado: normalizeEstado(estado),
         invitados: Math.max(clampNonNegativeInt(invitadosBase), clampNonNegativeInt(invitadosSabado)),
         asistencia: normalizeAsistencia(asistencia),
+        asistenciaDos: normalizeAsistencia(asistenciaDos),
         order: index
       };
     })
@@ -1404,6 +1501,7 @@ function buildWeekStatusMapWithCutoff(miembros, semana, explicitMap) {
             estado: "NO",
             invitados: clampNonNegativeInt(existing.invitados),
             asistencia: normalizeAsistencia(existing.asistencia),
+            asistenciaDos: normalizeAsistencia(existing.asistenciaDos),
             autoGenerated: true,
             lockedByCutoff: true
           });
@@ -1423,6 +1521,7 @@ function buildWeekStatusMapWithCutoff(miembros, semana, explicitMap) {
         estado: "NO",
         invitados: 0,
         asistencia: "",
+        asistenciaDos: "",
         order: Number.MAX_SAFE_INTEGER,
         autoGenerated: true,
         lockedByCutoff: true
@@ -1892,6 +1991,59 @@ function resolveAttendanceValue(value, key) {
   return normalizeAsistencia(state.attendanceOverrides[key]);
 }
 
+function resolveAttendanceTwoValue(value, key) {
+  const normalized = normalizeAsistencia(value);
+  if (normalized) {
+    return normalized;
+  }
+
+  return normalizeAsistencia(state.attendanceTwoOverrides[key]);
+}
+
+function buildAttendanceSummaryText(asistencia, asistenciaDos, includeSecond) {
+  const first = ATTENDANCE_META[normalizeAsistencia(asistencia)]?.label;
+  const second = ATTENDANCE_META[normalizeAsistencia(asistenciaDos)]?.label;
+
+  if (includeSecond) {
+    return [first ? `Manana: ${first}` : "", second ? `Tarde/noche: ${second}` : ""]
+      .filter(Boolean)
+      .join(". ");
+  }
+
+  return first ? `Reunion: ${first}` : "";
+}
+
+function buildAttendanceDetailText(asistencia, asistenciaDos, includeSecond) {
+  const first = normalizeAsistencia(asistencia);
+  const second = normalizeAsistencia(asistenciaDos);
+
+  if (includeSecond) {
+    if (first && second) {
+      return `Asistencia: ${attendancePhrase(first, "manana")} y ${attendancePhrase(second, "tarde/noche")}.`;
+    }
+    if (first) {
+      return `Asistencia: ${attendancePhrase(first, "manana")}. Falta marcar la reunion de la tarde o noche.`;
+    }
+    if (second) {
+      return `Asistencia: falta marcar la reunion de la manana y ${attendancePhrase(second, "tarde/noche")}.`;
+    }
+    return "";
+  }
+
+  return first ? `Asistencia: ${attendancePhrase(first, "reunion")}.` : "";
+}
+
+function attendancePhrase(value, slot) {
+  const attended = normalizeAsistencia(value) === "ASISTIO";
+  if (slot === "manana") {
+    return attended ? "asistio a la reunion o interseccion de la manana" : "no asistio a la reunion o interseccion de la manana";
+  }
+  if (slot === "tarde/noche") {
+    return attended ? "asistio a la reunion de la tarde o noche" : "no asistio a la reunion de la tarde o noche";
+  }
+  return attended ? "asistio a la reunion" : "no asistio a la reunion";
+}
+
 function toISODate(value) {
   if (value == null || value === "") {
     return "";
@@ -1952,17 +2104,23 @@ function isMeetingDayISO(iso) {
   return state.meetingDayNumbers.has(date.getDay());
 }
 
+function isSecondMeetingDayISO(iso) {
+  const date = toDate(iso);
+  if (!date) {
+    return false;
+  }
+
+  const dayKey = WEEK_DAYS.find((day) => day.offset + 1 === date.getDay())?.key;
+  return SECOND_MEETING_DAY_KEYS.includes(dayKey);
+}
+
 function hasSubmissionCutoffPassed(iso, now = new Date()) {
   const date = toDate(iso);
   if (!date) {
     return false;
   }
 
-  if (isMeetingDayISO(iso)) {
-    date.setHours(23, 59, 59, 999);
-  } else {
-    date.setHours(SUBMISSION_CUTOFF_HOUR, 0, 0, 0);
-  }
+  date.setHours(SUBMISSION_CUTOFF_HOUR, 0, 0, 0);
   return now.getTime() >= date.getTime();
 }
 
