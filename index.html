@@ -83,6 +83,7 @@
       <p class="eyebrow">Registro devocional</p>
       <h3 id="markModalTitle">Marcar estado</h3>
       <p id="markModalContext" class="modal-context"></p>
+      <p id="markModalAttendanceInfo" class="modal-attendance-info hidden"></p>
 
       <div class="modal-grid">
         <button class="modal-state modal-state-connected" type="button" data-action="select-mark-state" data-state="CONECTO">CLASE</button>
@@ -91,10 +92,18 @@
       </div>
 
       <div id="modalAttendanceWrap" class="modal-attendance-wrap hidden">
-        <p class="modal-attendance-title">Asistencia a reunión</p>
+        <p class="modal-attendance-title">Asistencia a reunión o intersección de la mañana</p>
         <div class="modal-attendance-grid">
           <button class="modal-attendance modal-attendance-yes" type="button" data-action="select-mark-attendance" data-attendance="ASISTIO">★ Asistió</button>
           <button class="modal-attendance modal-attendance-no" type="button" data-action="select-mark-attendance" data-attendance="NO_ASISTIO">✕ No asistió</button>
+        </div>
+      </div>
+
+      <div id="modalAttendanceTwoWrap" class="modal-attendance-wrap hidden">
+        <p class="modal-attendance-title">Asistencia a reunion de la tarde o noche</p>
+        <div class="modal-attendance-grid">
+          <button class="modal-attendance modal-attendance-yes" type="button" data-action="select-mark-attendance-two" data-attendance="ASISTIO">&#9733; Asistio</button>
+          <button class="modal-attendance modal-attendance-no" type="button" data-action="select-mark-attendance-two" data-attendance="NO_ASISTIO">&times; No asistio</button>
         </div>
       </div>
 
