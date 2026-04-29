@@ -1041,6 +1041,18 @@ button:disabled {
   line-height: 1;
 }
 
+.attendance-corner-stack {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: inline-flex;
+  gap: 3px;
+}
+
+.attendance-corner-stack .attendance-corner {
+  position: static;
+}
+
 .attendance-corner-yes {
   background: radial-gradient(circle at 30% 30%, #fff8d8 0%, #fcd34d 55%, #f59e0b 100%);
   color: #7c4704;
@@ -1051,6 +1063,18 @@ button:disabled {
   background: rgba(255, 95, 87, 0.2);
   color: #b4231c;
   border: 1px solid rgba(180, 35, 28, 0.28);
+}
+
+.attendance-corner-night.attendance-corner-yes {
+  background: radial-gradient(circle at 30% 30%, #e0f7ff 0%, #38bdf8 55%, #0284c7 100%);
+  color: #075985;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.55);
+}
+
+.attendance-corner-night.attendance-corner-no {
+  background: rgba(99, 102, 241, 0.16);
+  color: #3730a3;
+  border: 1px solid rgba(67, 56, 202, 0.28);
 }
 
 .day-cell-guests {
@@ -1242,6 +1266,20 @@ button:disabled {
 .modal-context {
   margin: 0;
   color: var(--text-soft);
+}
+
+.modal-attendance-info {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.modal-attendance-info.hidden {
+  display: none;
 }
 
 .modal-grid {
